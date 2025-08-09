@@ -25,7 +25,178 @@ class Portfolio:
     def reset(self):
         self.money = self.initial_money
         self.portfolio = copy.deepcopy(self.initial_holdings)
-        print(self.money, self.portfolio)
+
+
+class Strategy:
+    def __init__(self, stock_data: pd.DataFrame, portfolio: Portfolio, ticker: str, short_roll: int, long_roll: int, first_shares: int, rsi_period=14, rsi_oversold=30, rsi_overbought=70):
+        self.stock_data = stock_data
+        self.portfolio = portfolio
+        self.ticker = ticker
+        self.short_roll = short_roll
+        self.long_roll = long_roll
+        self.first_shares = first_shares
+        self.rsi_period = rsi_period
+        self.rsi_oversold = rsi_oversold
+        self.rsi_overbought = rsi_overbought
+        
+        self.n = len(stock_data)
+        self.short_roll_values = generate_derivative_cols(stock_data=stock_data, roll=short_roll)
+        self.long_roll_values = generate_derivative_cols(stock_data=stock_data, roll=long_roll)
+        self.rsi_values = calculate_RSI(stock_data, period=rsi_period)
+        self.value_of_portfolio = [np.nan] * self.n
+        
+    @staticmethod
+    def reset(func):
+        def wrapper(self, *args, **kwargs):
+            self.portfolio.reset()
+            result = func(self, *args, **kwargs)
+            return result
+        return wrapper
+    
+    @reset    
+    def buy_hold(self):
+        max_num_of_shares = self.portfolio.money // self.stock_data.Open.iloc[0]
+        price = self.stock_data.Open.iloc[0]
+        self.portfolio.buy(ticker=self.ticker, shares=max_num_of_shares, price=price)
+
+        baseline = [np.nan] * self.n
+        for i in range(self.n):
+            if i == 0:
+                price = self.stock_data.Open.iloc[i]
+                baseline[i] = (self.portfolio.get_value(ticker=self.ticker, price=price))
+            else:
+                price = self.stock_data.Close.iloc[i]
+                baseline[i] = (self.portfolio.get_value(ticker=self.ticker, price=price))
+        return baseline
+    
+    @reset
+    def momentum(self):
+        for i in range(self.n):
+            price = self.stock_data.Close.iloc[i]
+            max_shares_buy = int(self.portfolio.money // price)
+            max_shares_sell = self.portfolio.portfolio[self.ticker]
+            rsi = self.rsi_values.iloc[i]
+
+            buy_scale = 0
+            sell_scale = 0
+
+            if rsi < self.rsi_oversold:
+                buy_scale = (self.rsi_oversold - rsi) / self.rsi_oversold
+            elif rsi > self.rsi_overbought:
+                sell_scale = (rsi - self.rsi_overbought) / (100 - self.rsi_overbought)
+
+            scaled_buy_shares = int(max_shares_buy * buy_scale)
+            scaled_sell_shares = int(max_shares_sell * sell_scale)
+
+            if i <= 50 and i % 10 == 0:
+                self.portfolio.buy(ticker=self.ticker, shares=self.first_shares, price=price)
+
+            if self.long_roll_values[i] > 0:
+                if self.short_roll_values[i] > 0:
+                    if scaled_buy_shares > 0:
+                        self.portfolio.buy(ticker=self.ticker, shares=scaled_buy_shares, price=price)
+                    else:
+                        self.portfolio.add(ticker=self.ticker, shares=0)
+                else:
+                    self.portfolio.add(ticker=self.ticker, shares=0)
+
+            if self.long_roll_values[i] <= 0:
+                if self.short_roll_values[i] > 0:
+                    self.portfolio.add(ticker=self.ticker, shares=0)
+                else:
+                    if scaled_sell_shares > 0:
+                        self.portfolio.sell(ticker=self.ticker, shares=scaled_sell_shares, price=price)
+                    else:
+                        self.portfolio.add(ticker=self.ticker, shares=0)
+
+            self.value_of_portfolio[i] = self.portfolio.get_value(ticker=self.ticker, price=price)
+
+        return self.value_of_portfolio
+    
+    @reset
+    def cross(self):
+        for i in range(self.n):
+            price = self.stock_data.Close.iloc[i]
+            max_shares_buy = int(self.portfolio.money // price)
+            max_shares_sell = self.portfolio.portfolio[self.ticker]
+            rsi = self.rsi_values.iloc[i]
+
+            buy_scale = 0
+            sell_scale = 0
+
+            if rsi < self.rsi_oversold:
+                buy_scale = (self.rsi_oversold - rsi) / self.rsi_oversold
+            elif rsi > self.rsi_overbought:
+                sell_scale = (rsi - self.rsi_overbought) / (100 - self.rsi_overbought)
+
+            scaled_buy_shares = int(max_shares_buy * buy_scale)
+            scaled_sell_shares = int(max_shares_sell * sell_scale)
+            
+            if self.short_roll_values.iloc[i] > self.long_roll_values.iloc[i] and buy_scale > 0:
+                self.portfolio.buy(ticker=self.ticker, shares=scaled_buy_shares, price=price)
+            elif self.short_roll_values.iloc[i] < self.long_roll_values.iloc[i] and sell_scale > 0:
+                self.portfolio.sell(ticker=self.ticker, shares=scaled_sell_shares, price=price)
+            else:
+                self.portfolio.add(ticker=self.ticker, shares=0)
+            self.value_of_portfolio[i] = self.portfolio.get_value(self.ticker, price=price)
+        return self.value_of_portfolio
+    
+    @reset
+    def price_short(self):
+        for i in range(self.n):
+            price = self.stock_data.Close.iloc[i]
+            max_shares_buy = int(self.portfolio.money // price)
+            max_shares_sell = self.portfolio.portfolio[self.ticker]
+            rsi = self.rsi_values.iloc[i]
+
+            buy_scale = 0
+            sell_scale = 0
+
+            if rsi < self.rsi_oversold:
+                buy_scale = (self.rsi_oversold - rsi) / self.rsi_oversold
+            elif rsi > self.rsi_overbought:
+                sell_scale = (rsi - self.rsi_overbought) / (100 - self.rsi_overbought)
+
+            scaled_buy_shares = int(max_shares_buy * buy_scale)
+            scaled_sell_shares = int(max_shares_sell * sell_scale)
+            
+            if price > self.short_roll_values.iloc[i] and buy_scale > 0:
+                self.portfolio.buy(ticker=self.ticker, shares=scaled_buy_shares, price=price)
+            elif price < self.short_roll_values.iloc[i] and sell_scale > 0:
+                self.portfolio.sell(ticker=self.ticker, shares=scaled_sell_shares, price=price)
+            else:
+                self.portfolio.add(self.ticker, 0)
+            self.value_of_portfolio[i] = self.portfolio.get_value(ticker=self.ticker, price=price)
+        return self.value_of_portfolio
+        
+    @reset
+    def cross_ema(self):
+        for i in range(self.n):
+            price = self.stock_data.Close.iloc[i]
+            max_shares_buy = int(self.portfolio.money // price)
+            max_shares_sell = self.portfolio.portfolio[self.ticker]
+            rsi = self.rsi_values.iloc[i]
+
+            buy_scale = 0
+            sell_scale = 0
+
+            if rsi < self.rsi_oversold:
+                buy_scale = (self.rsi_oversold - rsi) / self.rsi_oversold
+            elif rsi > self.rsi_overbought:
+                sell_scale = (rsi - self.rsi_overbought) / (100 - self.rsi_overbought)
+
+            scaled_buy_shares = int(max_shares_buy * buy_scale)
+            scaled_sell_shares = int(max_shares_sell * sell_scale)
+            
+            if self.short_roll_values.iloc[i] > self.long_roll_values.iloc[i] and buy_scale > 0:
+                self.portfolio.buy(ticker=self.ticker, shares=scaled_buy_shares, price=price)
+            elif self.short_roll_values.iloc[i] < self.long_roll_values.iloc[i] and sell_scale > 0:
+                self.portfolio.sell(ticker=self.ticker, shares=scaled_sell_shares, price=price)
+            else:
+                self.portfolio.add(ticker=self.ticker, shares=0)
+            self.value_of_portfolio[i] = self.portfolio.get_value(self.ticker, price=price)
+        return self.value_of_portfolio         
+
 
 def calculate_RSI(stock_data: pd.DataFrame, period: int = 14) -> pd.Series:
     delta = stock_data['Close'].diff()
@@ -210,7 +381,7 @@ def price_vs_short(stock_data: pd.DataFrame, portfolio: Portfolio, ticker: str, 
 def generate_EMA(stock_data: pd.DataFrame, roll: int):
     return stock_data.Close.ewm(span=roll).mean()
 
-def cross_EMA(stock_data: pd.DataFrame, portfolio: Portfolio, short_roll: int, long_roll: int, ticker: str, ):
+def cross_EMA(stock_data: pd.DataFrame, portfolio: Portfolio, short_roll: int, long_roll: int, ticker: str):
     n = len(stock_data)
     short_roll_values = generate_EMA(stock_data=stock_data, roll=short_roll)
     long_roll_values = generate_EMA(stock_data=stock_data, roll=long_roll)
