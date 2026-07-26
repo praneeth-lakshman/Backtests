@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 
+from backtests.blend import blended_portfolio_values
 from backtests.data import get_stock_data
-from backtests.metrics import evaluate
+from backtests.metrics import best_strategy, evaluate
 from backtests.portfolio import Portfolio
 from backtests.report import plot_comparison, print_rankings, print_summary, save_results_csv
-from backtests.strategies import Strategy
+from backtests.strategies import STRATEGY_METHODS, Strategy, run_strategy
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,6 +42,12 @@ def parse_args() -> argparse.Namespace:
         help="Shares bought per warm-up tick in the momentum strategy (default: %(default)s)",
     )
     parser.add_argument(
+        "--blend",
+        action="store_true",
+        help="Also report a blended portfolio that splits the initial money equally across all strategies "
+        "and runs them simultaneously",
+    )
+    parser.add_argument(
         "--output-html",
         default="Strategy_Comparison.html",
         help="Path to write the interactive comparison chart (default: %(default)s)",
@@ -66,21 +73,13 @@ def main() -> None:
         rsi_overbought=args.rsi_overbought,
     )
 
-    runs = {
-        "Buy and Hold": strategy.buy_hold,
-        "Momentum": strategy.momentum,
-        "Cross (SMA)": strategy.cross,
-        "Price over Short": strategy.price_short,
-        "Cross (EMA)": strategy.cross_ema,
-    }
-
     print("=== STRATEGY PERFORMANCE ANALYSIS ===\n")
 
     series: dict[str, list[float]] = {}
     results: list[dict] = []
     benchmark: list[float] | None = None
-    for name, run in runs.items():
-        values = run()
+    for name in STRATEGY_METHODS:
+        values = run_strategy(strategy, name)
         series[name] = values
         if name == "Buy and Hold":
             benchmark = values
@@ -88,8 +87,28 @@ def main() -> None:
         results.append(result)
         print_summary(result)
 
-    plot_comparison(stock_data.index, series, args.ticker, args.interval, args.output_html)
-    print(f"Interactive plot saved as '{args.output_html}'")
+    if args.blend:
+        blended_label = "Blended (all strategies)"
+        blended_values = blended_portfolio_values(
+            stock_data=stock_data,
+            ticker=args.ticker,
+            labels=list(STRATEGY_METHODS),
+            initial_money=args.initial_money,
+            short_roll=args.short_window,
+            long_roll=args.long_window,
+            first_shares=args.first_shares,
+            rsi_period=args.rsi_period,
+            rsi_oversold=args.rsi_oversold,
+            rsi_overbought=args.rsi_overbought,
+        )
+        series[blended_label] = blended_values
+        result = evaluate(blended_label, blended_values, benchmark, args.risk_free_rate, args.interval)
+        results.append(result)
+        print_summary(result)
+
+    winner = best_strategy(results)
+    plot_comparison(stock_data.index, series, args.ticker, args.interval, args.output_html, highlight=winner)
+    print(f"Interactive plot saved as '{args.output_html}' (best strategy: {winner})")
 
     if args.output_csv:
         save_results_csv(results, args.output_csv)

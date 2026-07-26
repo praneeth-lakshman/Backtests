@@ -82,3 +82,8 @@ def evaluate(name: str, values: list[float], benchmark: list[float], annual_rf: 
         "sharpe_ratio": sharpe_ratio(values, periodic_rf),
         "final_value": values[-1],
     }
+
+
+def best_strategy(results: list[dict]) -> str:
+    """Name of the strategy with the highest final portfolio value."""
+    return max(results, key=lambda r: r["final_value"])["strategy"]

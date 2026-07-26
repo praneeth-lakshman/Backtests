@@ -60,3 +60,12 @@ def test_evaluate_returns_all_expected_keys():
     assert result["beta"] == pytest.approx(1.0)
     assert result["excess_return_pct"] == pytest.approx(0.0)
     assert result["final_value"] == 121
+
+
+def test_best_strategy_picks_highest_final_value():
+    results = [
+        {"strategy": "A", "final_value": 900},
+        {"strategy": "B", "final_value": 1200},
+        {"strategy": "C", "final_value": 1100},
+    ]
+    assert metrics.best_strategy(results) == "B"

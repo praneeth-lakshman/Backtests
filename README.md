@@ -19,6 +19,9 @@ interactive HTML chart comparing portfolio value over time.
 - **Standard performance metrics**: total return, excess return, annualized
   volatility, max drawdown, beta, and Sharpe ratio, computed consistently
   across every strategy and interval.
+- **Interactive web app**: enter a ticker, an investment amount, and a
+  strategy, and see the resulting portfolio value and chart live in the
+  browser — see [Web app](#web-app) below.
 - **Configurable via CLI flags**: ticker, history period, bar interval,
   starting cash, SMA/EMA windows, RSI period and thresholds, and the
   risk-free rate — no code editing required.
@@ -26,8 +29,8 @@ interactive HTML chart comparing portfolio value over time.
   strategy's portfolio value over the backtest period.
 - **Optional CSV export**: write the full metrics table to disk for further
   analysis.
-- **Automated test suite**: unit tests for the portfolio, indicators, and
-  metrics modules that run without network access.
+- **Automated test suite**: unit tests for the portfolio, indicators, report,
+  and metrics modules that run without network access.
 
 ## Installation
 
@@ -68,6 +71,22 @@ Each run prints a metrics block per strategy to the console, saves an
 interactive comparison chart (`Strategy_Comparison.html` by default), and
 optionally writes a CSV summary if `--output-csv` is given.
 
+## Web app
+
+An interactive [Streamlit](https://streamlit.io/) page lets you set a ticker,
+an investment amount, and which strategies to compare, then see the
+resulting portfolio value, an interactive chart, and the full metrics table
+— all without touching the command line.
+
+```bash
+streamlit run app.py
+```
+
+This opens the app at `http://localhost:8501`. Set your inputs in the
+sidebar (ticker, initial investment, history period, bar interval,
+strategies to compare, and an "Advanced settings" panel for SMA/EMA windows,
+RSI parameters, and the risk-free rate), then click **Run backtest**.
+
 ## Strategies
 
 | Strategy | Signal |
@@ -97,13 +116,14 @@ maximum affordable/sellable size.
 
 ```
 main.py                  CLI entry point
+app.py                    Streamlit web app
 backtests/
   data.py                 Fetches and cleans price history from yfinance
   portfolio.py             Cash/share bookkeeping for the backtest
   indicators.py            SMA, EMA, slope, and Wilder's RSI
   strategies.py             The five strategies, sharing one Portfolio/RSI state
   metrics.py                Return, volatility, drawdown, beta, Sharpe ratio
-  report.py                  Console summaries, HTML chart, CSV export
+  report.py                  Console summaries, HTML/Plotly chart, CSV export
 tests/                    Unit tests (no network access required)
 ```
 

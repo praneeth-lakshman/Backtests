@@ -152,3 +152,19 @@ class Strategy:
 
             values[i] = self.portfolio.get_value(ticker=self.ticker, price=price)
         return values
+
+
+#: Canonical display-name -> method-name mapping, shared by the CLI, the web
+#: app, and strategy blending so they always agree on what strategies exist.
+STRATEGY_METHODS: dict[str, str] = {
+    "Buy and Hold": "buy_hold",
+    "Momentum": "momentum",
+    "Cross (SMA)": "cross",
+    "Cross (EMA)": "cross_ema",
+    "Price over Short": "price_short",
+}
+
+
+def run_strategy(strategy: Strategy, label: str) -> list[float]:
+    """Run the strategy method registered under ``label`` (see STRATEGY_METHODS)."""
+    return getattr(strategy, STRATEGY_METHODS[label])()
