@@ -1,0 +1,29 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Test cache
+.pytest_cache/
+
+# Distribution / packaging
+*.egg-info/
+build/
+dist/
+
+# Generated output
+Strategy_Comparison.html
+*.csv
+
+# Editor / OS cruft
+.DS_Store
+.vscode/
+.idea/
+
+# Environment secrets
+.env
